@@ -106,7 +106,8 @@ DCL_HOOK_FUNC(static int, unshare, int flags) {
     if (g_ctx && (flags & CLONE_NEWNS) && !(g_ctx->flags & SERVER_FORK_AND_SPECIALIZE)) {
         bool should_unmount = !(g_ctx->info_flags & (PROCESS_IS_MANAGER | PROCESS_GRANTED_ROOT)) &&
                               g_ctx->flags & DO_REVERT_UNMOUNT;
-        if (!should_unmount && g_hook->zygote_unmounted) {
+        // how to fix "g_hook->zygote_unmounted"'s decision logic doesn't work?  目前采取了增加轮询时间的方案，不行的话可能需要试试别的
+        if (!should_unmount && g_hook->zygote_unmounted) { 
             ZygiskContext::update_mount_namespace(zygiskd::MountNamespace::Root);
         }
         bool is_zygote_clean = g_hook->zygote_unmounted && g_hook->zygote_traces.size() == 0;

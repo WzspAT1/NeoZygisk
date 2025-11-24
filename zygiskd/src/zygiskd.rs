@@ -255,7 +255,11 @@ fn load_modules() -> Result<Vec<Module>> {
 /// This is a security measure to prevent the library from being tampered with after loading.
 fn create_library_fd(so_path: &Path) -> Result<OwnedFd> {
     let opts = memfd::MemfdOptions::default().allow_sealing(true);
-    let memfd = opts.create("zygisk-module")?;
+
+    // [MODIFIED] Changed from "zygisk-module" to "jit-cache" for better stealth.
+    // "jit-cache" is a common memory name used by Android Runtime (ART),
+    // making this memfd blend in with legitimate system memory mappings.
+    let memfd = opts.create("jit-cache")?;
 
     // Copy the library content into the memfd.
     let file = fs::File::open(so_path)?;
