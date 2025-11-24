@@ -3,6 +3,7 @@
 #include <linux/un.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <thread>
 
 #include "logging.hpp"
 #include "socket_utils.hpp"
@@ -67,19 +68,41 @@ void CacheMountNamespace(pid_t pid) {
     socket_utils::write_u32(fd, (uint32_t) pid);
 }
 
+// --------------------------------------------------------
+
 std::string UpdateMountNamespace(MountNamespace type) {
-    UniqueFd fd = Connect(1);
-    if (fd == -1) {
-        PLOGE("UpdateMountNamespace");
-        return "socket not connected";
+    constexpr int MAX_RETRIES = 50;
+    constexpr int SLEEP_US = 10000;//wait for deamon's initialisation
+
+    for (int i = 0; i < MAX_RETRIES; ++i) {
+        UniqueFd fd = Connect(1);
+
+        if (fd == -1) {
+            usleep(SLEEP_US);
+            continue;
+        }//wait for deamon's reboot
+
+        socket_utils::write_u8(fd, (uint8_t) SocketAction::UpdateMountNamespace);
+        socket_utils::write_u8(fd, (uint8_t) type);
+
+        uint32_t target_pid = socket_utils::read_u32(fd);
+        int target_fd = (int) socket_utils::read_u32(fd);
+
+        // return results immediately after get FD
+        if (target_fd > 0) {
+            if (i > 0) {
+                LOGD("Acquired mount namespace after %d retries", i);
+            }// log if retried
+            return "/proc/" + std::to_string(target_pid) + "/fd/" + std::to_string(target_fd);
+        }
+                
+        usleep(SLEEP_US);
     }
-    socket_utils::write_u8(fd, (uint8_t) SocketAction::UpdateMountNamespace);
-    socket_utils::write_u8(fd, (uint8_t) type);
-    uint32_t target_pid = socket_utils::read_u32(fd);
-    int target_fd = (int) socket_utils::read_u32(fd);
-    if (target_fd == 0) return "not cached yet";
-    return "/proc/" + std::to_string(target_pid) + "/fd/" + std::to_string(target_fd);
+        
+        PLOGE("UpdateMountNamespace failed: timeout waiting for daemon cache");
+    return "not cached yet (timeout)";
 }
+// --------------------------------------------------------
 
 std::vector<Module> ReadModules() {
     std::vector<Module> modules;
